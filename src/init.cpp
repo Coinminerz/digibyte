@@ -41,6 +41,7 @@
 #include <policy/fees.h>
 #include <policy/policy.h>
 #include <policy/settings.h>
+#include <primitives/powcache.h>
 #include <protocol.h>
 #include <rpc/blockchain.h>
 #include <rpc/register.h>
@@ -283,6 +284,19 @@ void Shutdown(NodeContext& node)
     }
 #endif
 
+    // The PowCache is at a low-level, so we need to handle file I/O and logging here.
+    {
+        CAutoFile file(fsbridge::fopen(gArgs.GetDataDirNet() / "powcache.dat", "wb"), SER_DISK, POWCACHE_CURRENT_VERSION);
+        if (file.IsNull()) {
+            LogPrintf("%s: Unable to save to file\n", CPowCache::Instance().ToString());
+        }
+        else
+        {
+            CPowCache::Instance().Serialize(file);
+            LogPrintf("%s: Saved\n", CPowCache::Instance().ToString());
+        }
+    }
+
     node.chain_clients.clear();
     UnregisterAllValidationInterfaces();
     GetMainSignals().UnregisterBackgroundSignalScheduler();
@@ -405,6 +419,9 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-prune=<n>", strprintf("Reduce storage requirements by enabling pruning (deleting) of old blocks. This allows the pruneblockchain RPC to be called to delete specific blocks, and enables automatic pruning of old blocks if a target size in MiB is provided. This mode is incompatible with -txindex, -coinstatsindex and -rescan. "
             "Warning: Reverting this setting requires re-downloading the entire blockchain. "
             "(default: 0 = disable pruning blocks, 1 = allow manual pruning via RPC, >=%u = automatically prune block files to stay under the specified target size in MiB)", MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-powcachemaxelements=<n>", strprintf("Specify maximum number of elements in PowCache. (default: %d)", DEFAULT_POWCACHE_MAX_ELEMENTS), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-powcachesaveinterval=<n>", strprintf("Save PowCache after this many new elements. (default: %d)", DEFAULT_POWCACHE_SAVE_INTERVAL), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
+    argsman.AddArg("-powcachevalidate", strprintf("Validate every PowCache entry before use (for testing). (default: %u)", DEFAULT_POWCACHE_VALIDATE), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);            
     argsman.AddArg("-reindex", "Rebuild chain state and block index from the blk*.dat files on disk", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-reindex-chainstate", "Rebuild chain state from the currently indexed blocks. When in pruning mode or if blocks on disk might be corrupted, use full -reindex instead.", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
     argsman.AddArg("-settings=<file>", strprintf("Specify path to dynamic settings data file. Can be disabled with -nosettings. File is written at runtime and not meant to be edited by users (use %s instead for custom settings). Relative paths will be prefixed by datadir location. (default: %s)", DIGIBYTE_CONF_FILENAME, DIGIBYTE_SETTINGS_FILENAME), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1135,6 +1152,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     for (const auto& client : node.chain_clients) {
         client->registerRpcs();
     }
+
 #if ENABLE_ZMQ
     RegisterZMQRPCCommands(tableRPC);
 #endif
@@ -1318,6 +1336,36 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
         RegisterValidationInterface(g_zmq_notification_interface);
     }
 #endif
+
+    // ********************************************************* Step 6a: load powcache.dat
+
+    // Create and load PowCache
+    // The PowCache is at a low-level, so we need to handle file I/O and logging here.
+    {
+        int64_t maxElements  = gArgs.GetArg("-powcachemaxelements",  DEFAULT_POWCACHE_MAX_ELEMENTS);
+        bool    validate     = gArgs.GetBoolArg("-powcachevalidate",    DEFAULT_POWCACHE_VALIDATE);
+        size_t saveInterval = gArgs.GetArg("-powcachesaveinterval", DEFAULT_POWCACHE_SAVE_INTERVAL);
+        if (maxElements <= 0) {
+           maxElements = DEFAULT_POWCACHE_MAX_ELEMENTS;
+        }
+
+        CPowCache::Instance().SetMaxElements(maxElements);
+        CPowCache::Instance().SetValidate(validate);
+        CPowCache::Instance().SetSaveInterval(saveInterval);
+
+        uiInterface.InitMessage(_("Loading POW cache...").translated);
+
+        CAutoFile file(fsbridge::fopen(gArgs.GetDataDirNet() / "powcache.dat", "rb"), SER_DISK, POWCACHE_CURRENT_VERSION);
+        if (file.IsNull()) {
+            uiInterface.InitMessage("Loading POW cache for the first time.\nThis could take a minute...");
+            LogPrintf("%s: Unable to load from file\n", CPowCache::Instance().ToString());
+        }
+        else
+        {
+            CPowCache::Instance().Unserialize(file);
+            LogPrintf("%s: Loaded\n", CPowCache::Instance().ToString());
+        }
+    }    
 
     // ********************************************************* Step 7: load block chain
 
@@ -1672,6 +1720,15 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     if (ShutdownRequested()) {
         return false;
     }
+
+    // ********************************************************* Step 11a: Schedule PoW cache flush
+
+    // Periodic flush of POW Cache if cache has grown enough
+    node.scheduler->scheduleEvery(std::bind(&CPowCache::DoMaintenance, &CPowCache::Instance()), std::chrono::minutes{1});
+    // CPowCache* powcache = node.powcache.get();
+    // node.scheduler->scheduleEvery([powcache]{
+    //     powcache->DoMaintenance();
+    // }, std::chrono::minutes{1});        
 
     // ********************************************************* Step 12: start node
 

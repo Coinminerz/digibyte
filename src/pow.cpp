@@ -200,7 +200,7 @@ unsigned int GetNextWorkRequiredV4(const CBlockIndex* pindexLast, const Consensu
         pindexFirst = pindexFirst->pprev;
     }
 
-    const CBlockIndex* pindexPrevAlgo = GetLastBlockIndexForAlgo(pindexLast, params, algo);
+    const CBlockIndex* pindexPrevAlgo = GetLastBlockIndexForAlgoFast(pindexLast, params, algo);    
     if (pindexPrevAlgo == nullptr || pindexFirst == nullptr)
     {
         return InitialDifficulty(params, algo);
@@ -239,6 +239,10 @@ unsigned int GetNextWorkRequiredV4(const CBlockIndex* pindexLast, const Consensu
         {
             bnNew *= (100 + params.nLocalTargetAdjustment);
             bnNew /= 100;
+            if (i % 16 == 0 && bnNew > UintToArith256(params.powLimit)) {
+              bnNew = UintToArith256(params.powLimit);
+              break;
+            }            
         }
     }
 
@@ -343,7 +347,32 @@ const CBlockIndex* GetLastBlockIndexForAlgo(const CBlockIndex* pindex, const Con
     return nullptr;
 }
 
-uint256 GetPoWAlgoHash(const CBlockHeader& block)
+const CBlockIndex* GetLastBlockIndexForAlgoFast(const CBlockIndex* pindex, const Consensus::Params& params, int algo)
 {
-    return block.GetPoWAlgoHash(Params().GetConsensus());
+    for (; pindex; pindex = pindex->lastAlgoBlocks[algo])
+    {
+        if (pindex->GetAlgo() != algo)
+            continue;
+        if (params.fPowAllowMinDifficultyBlocks &&
+            pindex->pprev &&
+            pindex->nTime > pindex->pprev->nTime + params.nTargetSpacing*2)
+        {
+            pindex = pindex->pprev;
+            continue;
+        }
+        return pindex;
+    }
+
+    return nullptr;
+}
+
+bool CheckPOW(const CBlock& block, const Consensus::Params& consensusParams)
+{
+    if (!CheckProofOfWork(block.GetPoWAlgoHash(consensusParams, true), block.nBits, consensusParams)) {
+        LogPrintf("CheckPOW: CheckProofOfWork failed for %s, retesting without POW cache\n", block.GetHash().ToString());
+
+        // Retest without POW cache in case cache was corrupted:
+        return CheckProofOfWork(block.GetPoWAlgoHash(consensusParams,false), block.nBits, consensusParams);
+    }
+    return true;
 }

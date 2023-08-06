@@ -172,16 +172,19 @@ void BaseIndex::ThreadSync()
                 Commit();
             }
 
-            CBlock block;
-            if (!ReadBlockFromDisk(block, pindex, consensus_params)) {
-                FatalError("%s: Failed to read block %s from disk",
-                           __func__, pindex->GetBlockHash().ToString());
-                return;
-            }
-            if (!WriteBlock(block, pindex)) {
-                FatalError("%s: Failed to write block %s to index database",
-                           __func__, pindex->GetBlockHash().ToString());
-                return;
+            {
+                LOCK(cs_main);
+                CBlock block;
+                if (!ReadBlockFromDisk(block, pindex, consensus_params)) {
+                    FatalError("%s: Failed to read block %s from disk",
+                               __func__, pindex->GetBlockHash().ToString());
+                    return;
+                }
+                if (!WriteBlock(block, pindex)) {
+                    FatalError("%s: Failed to write block %s to index database",
+                               __func__, pindex->GetBlockHash().ToString());
+                    return;
+                }
             }
         }
     }

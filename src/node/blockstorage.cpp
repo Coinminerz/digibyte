@@ -380,7 +380,7 @@ bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::P
     }
 
     // Check the header
-    if (!CheckProofOfWork(GetPoWAlgoHash(block), block.nBits, consensusParams)) {
+    if (!CheckPOW(block, consensusParams)) {
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
     }
 

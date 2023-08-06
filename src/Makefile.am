@@ -548,6 +548,8 @@ libdigibyte_consensus_a_SOURCES = \
   prevector.h \
   primitives/block.cpp \
   primitives/block.h \
+  primitives/powcache.cpp \
+  primitives/powcache.h \
   primitives/transaction.cpp \
   primitives/transaction.h \
   pubkey.cpp \
@@ -564,6 +566,7 @@ libdigibyte_consensus_a_SOURCES = \
   tinyformat.h \
   uint256.cpp \
   uint256.h \
+  util/unordered_lru_cache.h \
   util/strencodings.cpp \
   util/strencodings.h \
   version.h

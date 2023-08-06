@@ -3097,6 +3097,11 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
         pindexNew->BuildSkip();
     }
+    if (pindexNew->pprev) {
+        for (unsigned i = 0; i < NUM_ALGOS_IMPL; i++)
+            pindexNew->lastAlgoBlocks[i] = pindexNew->pprev->lastAlgoBlocks[i];
+        pindexNew->lastAlgoBlocks[pindexNew->GetAlgo()] = pindexNew;
+    }    
     pindexNew->nTimeMax = (pindexNew->pprev ? std::max(pindexNew->pprev->nTimeMax, pindexNew->nTime) : pindexNew->nTime);
     pindexNew->nChainWork = (pindexNew->pprev ? pindexNew->pprev->nChainWork : 0) + GetBlockProof(*pindexNew);
     pindexNew->RaiseValidity(BLOCK_VALID_TREE);
@@ -3158,7 +3163,7 @@ void CChainState::ReceivedBlockTransactions(const CBlock& block, CBlockIndex* pi
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(GetPoWAlgoHash(block), block.nBits, consensusParams))
+    if (fCheckPOW && !CheckPOW(block, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
 
     return true;
@@ -3865,8 +3870,10 @@ bool BlockManager::LoadBlockIndex(
     CBlockTreeDB& blocktree,
     std::set<CBlockIndex*, CBlockIndexWorkComparator>& block_index_candidates)
 {
-    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); }))
+    int nHighest = 1;
+    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); }, nHighest))
         return false;
+    uiInterface.InitMessage(strprintf(_("Loading blocks... 100%%").translated));
 
     // Calculate nChainWork
     std::vector<std::pair<int, CBlockIndex*> > vSortedByHeight;
@@ -3877,12 +3884,26 @@ bool BlockManager::LoadBlockIndex(
         vSortedByHeight.push_back(std::make_pair(pindex->nHeight, pindex));
     }
     sort(vSortedByHeight.begin(), vSortedByHeight.end());
+    int nHeight = 0;
+    int nLastPercent = -1;
     for (const std::pair<int, CBlockIndex*>& item : vSortedByHeight)
     {
+        int nPercent = 100 * nHeight / nHighest;
+        if (nPercent > nLastPercent && nPercent % 10 == 0) {
+            uiInterface.InitMessage(strprintf(_("Indexing blocks... %d%%").translated, (100 * nHeight) / nHighest));
+            nLastPercent = nPercent;
+        }
         if (ShutdownRequested()) return false;
         CBlockIndex* pindex = item.second;
+        if (pindex->pprev) {
+            for (unsigned i = 0; i < NUM_ALGOS_IMPL; i++)
+              pindex->lastAlgoBlocks[i] = pindex->pprev->lastAlgoBlocks[i];
+            pindex->lastAlgoBlocks[pindex->GetAlgo()] = pindex;
+        }
+
         pindex->nChainWork = (pindex->pprev ? pindex->pprev->nChainWork : 0) + GetBlockProof(*pindex);
         pindex->nTimeMax = (pindex->pprev ? std::max(pindex->pprev->nTimeMax, pindex->nTime) : pindex->nTime);
+        nHeight = pindex->nHeight;
         // We can link the chain of blocks for which we've received transactions at some point.
         // Pruned nodes may have deleted the block.
         if (pindex->nTx > 0) {
@@ -3911,6 +3932,7 @@ bool BlockManager::LoadBlockIndex(
         if (pindex->IsValid(BLOCK_VALID_TREE) && (pindexBestHeader == nullptr || CBlockIndexWorkComparator()(pindexBestHeader, pindex)))
             pindexBestHeader = pindex;
     }
+    uiInterface.InitMessage(strprintf(_("Indexing blocks... 100%%").translated));
 
     return true;
 }
@@ -4405,6 +4427,7 @@ void CChainState::LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                 std::deque<uint256> queue;
                 queue.push_back(hash);
                 while (!queue.empty()) {
+                    LOCK(cs_main);
                     uint256 head = queue.front();
                     queue.pop_front();
                     std::pair<std::multimap<uint256, FlatFilePos>::iterator, std::multimap<uint256, FlatFilePos>::iterator> range = mapBlocksUnknownParent.equal_range(head);

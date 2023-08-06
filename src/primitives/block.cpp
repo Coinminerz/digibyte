@@ -5,6 +5,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <primitives/block.h>
+#include <primitives/powcache.h>
 #include <crypto/common.h>
 #include <crypto/hashgroestl.h>
 #include <crypto/hashodo.h>
@@ -53,7 +54,8 @@ uint32_t OdoKey(const Consensus::Params& params, uint32_t nTime)
 
 }
 
-uint256 CBlockHeader::GetPoWAlgoHash(const Consensus::Params& params) const
+//uint256 CBlockHeader::GetPoWAlgoHash(const Consensus::Params& params) const
+uint256 CBlockHeader::ComputeHash(const Consensus::Params& params) const
 {
     switch (GetAlgo())
     {
@@ -87,6 +89,30 @@ uint256 CBlockHeader::GetPoWAlgoHash(const Consensus::Params& params) const
     }
     assert(false);
     return GetHash();
+}
+
+uint256 CBlockHeader::GetPoWAlgoHash(const Consensus::Params& params, bool readCache) const
+{
+    CPowCache& cache(CPowCache::Instance());
+
+    uint256 headerHash = GetHash();
+    uint256 powHash;
+    bool found = false;
+
+    if (readCache) {
+        found = cache.get(headerHash, powHash);
+    }
+
+    if (!found || cache.GetValidate()) {
+        uint256 powHash2 = ComputeHash(params);
+        if (found && powHash2 != powHash) {
+            // We cannot use the loggers at this level
+            std::cerr << "PowCache failure: headerHash: " << headerHash.ToString() << ", from cache: " << powHash.ToString() << ", computed: " << powHash2.ToString() << ", correcting" << std::endl;        
+        }
+        cache.erase(headerHash); // If it exists, replace it
+        cache.insert(headerHash, powHash2);
+    }
+    return powHash;
 }
 
 std::string CBlock::ToString(const Consensus::Params& params) const

@@ -10,6 +10,7 @@
 #include <primitives/transaction.h>
 #include <serialize.h>
 #include <uint256.h>
+#include <util/unordered_lru_cache.h>
 
 namespace Consensus { struct Params; }
 
@@ -125,7 +126,8 @@ public:
 
     uint256 GetHash() const;
 
-    uint256 GetPoWAlgoHash(const Consensus::Params& params) const;
+    uint256 ComputeHash(const Consensus::Params& params) const;
+    uint256 GetPoWAlgoHash(const Consensus::Params& params, bool readCache = true) const;
 
     int64_t GetBlockTime() const
     {

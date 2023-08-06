@@ -7,11 +7,14 @@
 #ifndef DIGIBYTE_UINT256_H
 #define DIGIBYTE_UINT256_H
 
+#include <span.h>
+
 #include <assert.h>
 #include <cstring>
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <crypto/common.h>
 
 /** Template base class for fixed-sized opaque blobs. */
 template<unsigned int BITS>
@@ -21,6 +24,10 @@ protected:
     static constexpr int WIDTH = BITS / 8;
     uint8_t m_data[WIDTH];
 public:
+    const uint32_t *GetDataPtr() const
+    {
+        return (const uint32_t *)m_data;
+    }
     /* construct 0 value by default */
     constexpr base_blob() : m_data() {}
 
@@ -127,6 +134,10 @@ public:
     constexpr uint256() {}
     constexpr explicit uint256(uint8_t v) : base_blob<256>(v) {}
     explicit uint256(const std::vector<unsigned char>& vch) : base_blob<256>(vch) {}
+    uint64_t GetCheapHash() const
+    {
+        return ReadLE64(m_data);
+    }    
     static const uint256 ZERO;
     static const uint256 ONE;
 };
@@ -172,6 +183,17 @@ inline uint256 uint256S(const std::string& str)
     uint256 rv;
     rv.SetHex(str);
     return rv;
+}
+
+namespace std {
+    template <>
+    struct hash<uint256>
+    {
+        std::size_t operator()(const uint256& k) const
+        {
+            return (std::size_t)k.GetCheapHash();
+        }
+    };
 }
 
 #endif // DIGIBYTE_UINT256_H
