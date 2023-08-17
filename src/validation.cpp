@@ -3866,7 +3866,7 @@ bool BlockManager::LoadBlockIndex(
     std::set<CBlockIndex*, CBlockIndexWorkComparator>& block_index_candidates)
 {
     int nHighest = 1;
-    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); }))
+    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); }, nHighest))
         return false;
 
     // Calculate nChainWork
