@@ -142,11 +142,14 @@ public:
         // service bits we want, but we should get them updated to support all service bits wanted by any
         // release ASAP to avoid it where possible.
 
-        // The current list of DigiByte Seeders and who maintains them can be found pinned to the top of
-        // the DGBCIT Telegram group: https://t.me/DGBCIT
+        // The current status of the DigiByte Seeders can be checked here: http://digibyteseed.com/
+        // If you notice a problem with an exiting Seeder, please contact the DigiByte Critical Infrastructure team (DGBCIT) 
+        // via the #DGBCIT channel on the DigiByte Discord server: https://discord.com/channels/878200503815782400/1133815334013509764
+        // Alternatively, create an issue ticket here: https://github.com/DigiByte-Core/digibyte/issues
 
         // When adding a new MAINNET Seeder URL below, please include the name of the person in charge of it
         // and their Github handle so they can be contacted in an emergency.
+
 
         // DigiByte MAINNET DNS Seeders:
         vSeeds.emplace_back("seed.digibyte.io"); // Jared Tate @JaredTate
@@ -156,6 +159,7 @@ public:
         vSeeds.emplace_back("eu.digibyteseed.com"); // Jan De Jong @jongjan88
         vSeeds.emplace_back("seed.digibyte.link"); // Bastian Driessen @bastiandriessen
         vSeeds.emplace_back("seed.quakeguy.com"); // Paul Morgan Quakeitup @SnKQuaKe
+        vSeeds.emplace_back("seed.aroundtheblock.app"); // Mark McNiel @JohnnyLawDGB
 
         // DigiByte MAINNET Full Nodes: (These will eventually be removed to be replaced with genuine DigiByte Seeders above.)
         vSeeds.emplace_back("seed2.digibyte.io"); // Jared Tate
@@ -408,8 +412,10 @@ public:
         vFixedSeeds.clear();
         vSeeds.clear();
 
-        // The current list of DigiByte Seeders and who maintains them can be found pinned to the top of
-        // the DGBCIT Telegram group: https://t.me/DGBCIT
+        // The current status of the DigiByte Seeders can be checked here: http://digibyteseed.com/
+        // If you notice a problem with an exiting Seeder, please contact the DigiByte Critical Infrastructure team (DGBCIT) 
+        // via the #DGBCIT channel on the DigiByte Discord server: https://discord.com/channels/878200503815782400/1133815334013509764
+        // Alternatively, create an issue ticket here: https://github.com/DigiByte-Core/digibyte/issues
 
         // When adding a new TESTNET Seeder URL below, please include the name of the person in charge of it
         // and their Github handle so they can be contacted in an emergency.
