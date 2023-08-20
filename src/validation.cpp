@@ -3097,6 +3097,13 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
         pindexNew->BuildSkip();
     }
+
+    if (pindexNew->pprev) {
+        for (unsigned i = 0; i < NUM_ALGOS_IMPL; i++)
+            pindexNew->lastAlgoBlocks[i] = pindexNew->pprev->lastAlgoBlocks[i];
+        pindexNew->lastAlgoBlocks[pindexNew->GetAlgo()] = pindexNew;
+    }
+
     pindexNew->nTimeMax = (pindexNew->pprev ? std::max(pindexNew->pprev->nTimeMax, pindexNew->nTime) : pindexNew->nTime);
     pindexNew->nChainWork = (pindexNew->pprev ? pindexNew->pprev->nChainWork : 0) + GetBlockProof(*pindexNew);
     pindexNew->RaiseValidity(BLOCK_VALID_TREE);
@@ -3889,6 +3896,13 @@ bool BlockManager::LoadBlockIndex(
         }
         if (ShutdownRequested()) return false;
         CBlockIndex* pindex = item.second;
+
+        if (pindex->pprev) {
+            for (unsigned i = 0; i < NUM_ALGOS_IMPL; i++)
+              pindex->lastAlgoBlocks[i] = pindex->pprev->lastAlgoBlocks[i];
+            pindex->lastAlgoBlocks[pindex->GetAlgo()] = pindex;
+        }
+        
         pindex->nChainWork = (pindex->pprev ? pindex->pprev->nChainWork : 0) + GetBlockProof(*pindex);
         pindex->nTimeMax = (pindex->pprev ? std::max(pindex->pprev->nTimeMax, pindex->nTime) : pindex->nTime);
         // We can link the chain of blocks for which we've received transactions at some point.

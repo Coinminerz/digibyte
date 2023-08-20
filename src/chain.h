@@ -200,6 +200,7 @@ public:
 
     //! (memory only) Maximum nTime in the chain up to and including this block.
     unsigned int nTimeMax{0};
+    CBlockIndex *lastAlgoBlocks[NUM_ALGOS_IMPL];
 
     CBlockIndex()
     {
@@ -212,6 +213,9 @@ public:
           nBits{block.nBits},
           nNonce{block.nNonce}
     {
+         for (unsigned i = 0; i < NUM_ALGOS_IMPL; i++)
+             lastAlgoBlocks[i] = nullptr;
+         lastAlgoBlocks[GetAlgo()] = this;        
     }
 
     FlatFilePos GetBlockPos() const {
